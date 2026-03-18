@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Attendance Pro</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .status-badge { @apply px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <header class="mb-10 text-center md:text-left">
+            <h1 class="text-3xl font-bold text-slate-800">Student Attendance</h1>
+            <p class="text-slate-500">Track and manage student presence in real-time.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Attendance Form -->
+            <section class="lg:col-span-1">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold text-slate-700 mb-4">Mark Attendance</h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Student Name</label>
+                            <input type="text" id="studentName" placeholder="Enter full name" 
+                                class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-2">
+                            <button onclick="submitAttendance('Present')" 
+                                class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 rounded-lg transition shadow-md shadow-emerald-100">
+                                Attendance
+                            </button>
+                            <button onclick="submitAttendance('Absent')" 
+                                class="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold py-2 rounded-lg transition shadow-md shadow-rose-100">
+                                Absence
+                            </button>
+                            <button onclick="submitAttendance('Tardy')" 
+                                class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 rounded-lg transition shadow-md shadow-amber-100">
+                                Tardiness
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Attendance Records Display -->
+            <section class="lg:col-span-2">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <h2 class="text-lg font-semibold text-slate-700">Recent Records</h2>
+                        <span id="recordCount" class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded">0 records</span>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
+                                <tr>
+                                    <th class="px-6 py-4">Student</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTable" class="divide-y divide-slate-100">
+                                <!-- Records will be injected here -->
+                            </tbody>
+                        </table>
+                        <div id="emptyState" class="p-10 text-center text-slate-400 hidden">
+                            No attendance records found.
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- REPLACE WITH YOUR PROJECT CONFIG FROM FIREBASE CONSOLE ---
+        const firebaseConfig = {
+              apiKey: "AIzaSyBOzxC4wq_3zi8swthwP7jOEtFer0enZDw",
+              authDomain: "attendance-app-2026-5b9d1.firebaseapp.com",
+              projectId: "attendance-app-2026-5b9d1",
+              storageBucket: "attendance-app-2026-5b9d1.firebasestorage.app",
+              messagingSenderId: "487550108197",
+              appId: "1:487550108197:web:a69f8c4c992cf12adc75cc",
+              measurementId: "G-YBHMC7JNKN"
+        };
+
+        //Initialise Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const attendanceRef = collection(db, "attendance");
+
+        // Submit Attendance
+        window.submitAttendance = async (status) => {
+            const nameInput = document.getElementById('studentName');
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                alert("Please enter a student name.");
+                return;
+            }
+
+            try {
+                await addDoc(attendanceRef, {
+                    studentName: name,
+                    status: status,
+                    timestamp: serverTimestamp()
+                });
+                nameInput.value = ""; // Clear input
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                alert("Error saving record. Check console for details.");
+            }
+        };
+
+        // Real-time Listener for Records
+        const q = query(attendanceRef, orderBy("timestamp", "desc"));
+        onSnapshot(q, (snapshot) => {
+            const tableBody = document.getElementById('attendanceTable');
+            const emptyState = document.getElementById('emptyState');
+            const recordCount = document.getElementById('recordCount');
+            
+            tableBody.innerHTML = "";
+            recordCount.innerText = `${snapshot.size} records`;
+
+            if (snapshot.empty) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const date = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Saving...';
+                    
+                    const statusColors = {
+                        'Present': 'bg-emerald-100 text-emerald-700',
+                        'Absent': 'bg-rose-100 text-rose-700',
+                        'Tardy': 'bg-amber-100 text-amber-700'
+                    };
+
+                    const row = `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="px-6 py-4 font-medium text-slate-700">${data.studentName}</td>
+                            <td class="px-6 py-4">
+                                <span class="status-badge ${statusColors[data.status] || 'bg-slate-100'}">
+                                    ${data.status}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-slate-500">${date}</td>
+                        </tr>
+                    `;
+                    tableBody.innerHTML += row;
+                });
+            }
+        });
+    </script>
+</body>
+</html>
